@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Drive Compatibility Checker</title>
+  <style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Navbar styling */
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #2e7d32;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+
+  .navbar img {
+    height: 40px;
+    max-width: 100%;
+  }
+
+  .navbar-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .navbar-links a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  label {
+    font-weight: bold;
+    display: block;
+    margin-top: 10px;
+  }
+
+  select, button {
+    padding: 10px;
+    width: 100%;
+    max-width: 350px;
+    margin-top: 5px;
+    font-size: 16px;
+  }
+
+  button {
+    margin-top: 20px;
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #256428;
+  }
+
+  #result {
+    margin-top: 30px;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+  }
+
+  th, td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: left;
+    font-size: 14px;
+  }
+
+  th {
+    background-color: #f2f2f2;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 600px) {
+    .navbar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .navbar-links {
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .content {
+      padding: 16px;
+    }
+
+    table {
+      font-size: 12px;
+      min-width: 100%;
+    }
+  }
+</style>
+
+</head>
+<body>
+
+<!-- Top Navigation Bar -->
+<div class="navbar">
+  <img src="logo.png" alt="Logo">
+  <div class="navbar-links">
+    <a href="https://your-portal-link.com" target="_blank">Go to Portal</a>
+    <a href="mailto:support@example.com">Contact Tech Support</a>
+  </div>
+</div>
+
+<!-- Page Content -->
+<div class="content">
+  <h2>Drive Compatibility Checker</h2>
+
+  <label for="driveCode">Select Drive Code:</label><br>
+  <select id="driveCode">
+    <option value="">-- Select Drive Code --</option>
+  </select><br>
+
+  <label for="make">Select Motor Make:</label><br>
+  <select id="make">
+    <option value="">-- Select Drive Code First --</option>
+  </select><br>
+
+  <button id="submitBtn">Submit</button>
+
+  <div id="result"></div>
+</div>
+
+<script>
+  let allData = [];
+
+  function isValidDriveCode(code) {
+    return /^[A-Za-z]{1,2}$/.test(code);
+  }
+
+  fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vQwUBCyqD1NtOnkuLtpTOwez1KbyLxcVChV6_qZ9VjBiZQnDX9_la6BcYOFcA1_rtarVvOlgFH3-YuL/pub?output=csv')
+    .then(response => response.text())
+    .then(csv => {
+      const rows = csv.trim().split('\n');
+      const headers = rows[0].split(',');
+      const data = rows.slice(1).map(row => {
+        const values = row.split(',');
+        const obj = {};
+        headers.forEach((header, i) => {
+          obj[header.trim()] = values[i]?.trim();
+        });
+        return obj;
+      });
+
+      // Filter: exclude "Hold" and invalid Drive Code
+      allData = data.filter(item =>
+        item["Status"]?.toLowerCase() !== "hold" &&
+        isValidDriveCode(item["Drive Code"])
+      );
+
+      // Populate Drive Code dropdown
+      const driveCodes = [...new Set(allData.map(item => item["Drive Code"]).filter(Boolean))];
+      const driveSelect = document.getElementById("driveCode");
+
+      driveCodes.forEach(code => {
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = code;
+        driveSelect.appendChild(option);
+      });
+
+      // Populate Make dropdown when Drive Code is selected
+      driveSelect.addEventListener("change", function () {
+        const selectedCode = this.value;
+        const makeSelect = document.getElementById("make");
+        makeSelect.innerHTML = '<option value="">-- Select Motor Make --</option>';
+
+        const makes = [...new Set(allData
+          .filter(item => item["Drive Code"] === selectedCode)
+          .map(item => item["Make"])
+          .filter(Boolean))];
+
+        makes.forEach(make => {
+          const option = document.createElement("option");
+          option.value = make;
+          option.textContent = make;
+          makeSelect.appendChild(option);
+        });
+      });
+
+      // Submit action
+      document.getElementById("submitBtn").addEventListener("click", function () {
+        const selectedCode = document.getElementById("driveCode").value;
+        const selectedMake = document.getElementById("make").value;
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "";
+
+        if (!selectedCode || !selectedMake) {
+          resultDiv.textContent = "Please select both Drive Code and Motor Make.";
+          return;
+        }
+
+        const matches = allData.filter(item =>
+          item["Drive Code"] === selectedCode && item["Make"] === selectedMake
+        );
+
+        if (matches.length === 0) {
+          resultDiv.textContent = "No compatible parameters found.";
+          return;
+        }
+
+        let table = `
+          <table>
+            <thead>
+              <tr>
+                <th>Parameter Version</th>
+                <th>Firmware Version</th>
+                <th>Design Description</th>
+                <th>Motor AC/DC</th>
+                <th>HP</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        matches.forEach(item => {
+          table += `
+            <tr>
+              <td>${item["Parameter Version"] || "-"}</td>
+              <td>${item["Drive firmware version"] || "-"}</td>
+              <td>${item["Design"] || "-"}</td>
+              <td>${item["AC/DC"] || "-"}</td>
+              <td>${item["HP"] || "-"}</td>
+            </tr>
+          `;
+        });
+
+        table += "</tbody></table>";
+        resultDiv.innerHTML = table;
+      });
+    })
+    .catch(err => {
+      alert("Error loading Google Sheet: " + err);
+    });
+</script>
+
+
+
+</body>
+</html>
